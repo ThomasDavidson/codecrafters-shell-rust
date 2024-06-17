@@ -19,6 +19,15 @@ fn main() {
         match command {
             "exit" => break,
             "echo" => println!("{}", argument),
+            "type" => {
+                if ["exit"
+                    , "echo"
+                    , "type"].contains(&argument) {
+                    println!("exit is a shell builtin")
+                } else {
+                    println!("{}: command not found", argument)
+                }
+            }
             _ => println!("{}: command not found", command),
         };
     }
