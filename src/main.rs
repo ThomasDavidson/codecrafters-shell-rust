@@ -45,7 +45,7 @@ fn main() {
 
         match command {
             "exit" => break,
-            "echo" => println!("{}", argument),
+            // "echo" => println!("{}", argument),
             "type" => {
                 if ["exit"
                     , "echo"
@@ -58,12 +58,14 @@ fn main() {
                 }
             }
             _ => {
-                if let Some(file) = file_on_path(command) {
+                if let Some(_) = file_on_path(command) {
                     let output = Command::new("sh")
-                        .arg(file)
-                        .arg(argument)
+                        .arg("-c")
+                        .arg(first_line)
                         .output()
                         .unwrap();
+                    println!("Status: {:?}", output);
+
                     let fmt_output = output.stdout.into_iter().map(|c| c as char).collect::<String>();
                     println!("Hello {}! The secret code is {}", argument, fmt_output);
                 } else {
