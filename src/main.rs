@@ -25,7 +25,7 @@ fn main() {
                     , "type"].contains(&argument) {
                     println!("{} is a shell builtin", argument)
                 } else {
-                    println!("{}: command not found", argument)
+                    println!("{}: not found", argument)
                 }
             }
             _ => println!("{}: command not found", command),
