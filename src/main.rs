@@ -9,4 +9,10 @@ fn main() {
     let stdin = io::stdin();
     let mut input = String::new();
     stdin.read_line(&mut input).unwrap();
+
+    let command = match input {
+        _ => println!("{:?}: command not found", input),
+    };
+
+
 }
