@@ -64,7 +64,7 @@ fn main() {
                         .unwrap();
 
                     let fmt_output = output.stdout.into_iter().map(|c| c as char).collect::<String>();
-                    println!("Hello {}! The secret code is {}.", argument, fmt_output.trim());
+                    println!("{}", fmt_output.trim());
                 } else {
                     println!("{}: command not found", command)
                 }
