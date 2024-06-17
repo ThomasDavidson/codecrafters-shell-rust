@@ -1,7 +1,32 @@
+use std::env;
 #[allow(unused_imports)]
 use std::io::{self, Write};
+use std::path::Path;
+
+fn get_path() -> Vec<String> {
+    let key = "PATH";
+    match env::var_os(key) {
+        Some(paths) => {
+            env::split_paths(&paths).map(|p| p.to_str().unwrap().to_string()).collect()
+        }
+        None => Vec::new()
+    }
+}
+
+fn file_on_path(file: &str) -> Option<String> {
+    let paths = get_path();
+    for path in paths {
+        let file_check = format!("{}/{}", path, file);if Path::new(&file_check).exists() {
+            return Some(file_check);
+        }
+    }
+
+    None
+}
+
 
 fn main() {
+    get_path();
     loop {
         print!("$ ");
         io::stdout().flush().unwrap();
@@ -24,11 +49,15 @@ fn main() {
                     , "echo"
                     , "type"].contains(&argument) {
                     println!("{} is a shell builtin", argument)
+                } else if let Some(file) = file_on_path(argument) {
+                    println!("{} is {}", argument, file)
                 } else {
                     println!("{}: not found", argument)
                 }
             }
-            _ => println!("{}: command not found", command),
+            _ => {
+                println!("{}: command not found", command)
+            }
         };
     }
 }

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="RemoteTargetsManager">
+    <targets>
+      <target name="WSL - Ubuntu" type="wsl" uuid="7d368de1-f5b8-49a6-a203-6dccae480e37">
+        <config>
+          <option name="distributionMsId" value="Ubuntu" />
+          <option name="projectRootOnTarget" value="{exitCode=0, timeout=false, cancelled=false, stdout=/tmp/tmp.4t0dlaJiLA&#10;, stderr=}/codecrafters-shell-rust" />
+        </config>
+        <ContributedStateBase type="RsLanguageRuntime">
+          <config>
+            <option name="cargoPath" value="/home/thomas/.cargo/bin/cargo" />
+            <option name="cargoVersion" value="1.79.0 (ffa9cf99a 2024-06-03)" />
+            <option name="rustcPath" value="/home/thomas/.cargo/bin/rustc" />
+            <option name="rustcVersion" value="1.79.0 (129f3b996 2024-06-10)" />
+          </config>
+        </ContributedStateBase>
+      </target>
+    </targets>
+  </component>
+</project>
