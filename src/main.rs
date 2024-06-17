@@ -1,4 +1,5 @@
 use std::env;
+use std::env::set_current_dir;
 #[allow(unused_imports)]
 use std::io::{self, Write};
 use std::path::Path;
@@ -65,6 +66,12 @@ fn main() {
                     }
                 };
                 println!("{}", path.display());
+            }
+            "cd" => {
+                match set_current_dir(argument) {
+                    Ok(_) => continue,
+                    Err(_) => println!("cd: {}: No such file or directory", argument),
+                }
             }
             _ => {
                 if let Some(_) = file_on_path(command) {
