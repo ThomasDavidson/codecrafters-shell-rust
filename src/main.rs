@@ -10,8 +10,10 @@ fn main() {
     let mut input = String::new();
     stdin.read_line(&mut input).unwrap();
 
+    let command = input.lines().next().unwrap();
+
     match input {
-        _ => println!("{:?}: command not found", input),
+        _ => println!("{:?}: command not found", command),
     };
 
 
