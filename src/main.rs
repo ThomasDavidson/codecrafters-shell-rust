@@ -38,9 +38,7 @@ fn main() {
         let mut input = String::new();
         stdin.read_line(&mut input).unwrap();
 
-        let first_line = input.lines().next().unwrap();
-
-        let (command, argument) = first_line.split_once(" ").unwrap_or_else(|| (first_line, ""));
+        let (command, argument) = input.trim().split_once(" ").unwrap_or_else(|| (input.trim(), ""));
 
 
         match command {
@@ -61,12 +59,12 @@ fn main() {
                 if let Some(_) = file_on_path(command) {
                     let output = Command::new("sh")
                         .arg("-c")
-                        .arg(first_line)
+                        .arg(&input)
                         .output()
                         .unwrap();
 
                     let fmt_output = output.stdout.into_iter().map(|c| c as char).collect::<String>();
-                    println!("Hello {}! The secret code is {}.", argument, fmt_output);
+                    println!("Hello {}! The secret code is {}.", argument, fmt_output.trim());
                 } else {
                     println!("{}: command not found", command)
                 }
