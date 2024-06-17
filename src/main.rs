@@ -58,9 +58,10 @@ fn main() {
                 }
             }
             _ => {
-                if let Some(_) = file_on_path(argument) {
+                if let Some(file) = file_on_path(argument) {
                     let output = Command::new("sh")
-                        .arg(first_line)
+                        .arg(file)
+                        .arg(argument)
                         .output()
                         .unwrap();
                     let fmt_output = output.stdout.into_iter().map(|c| c as char).collect::<String>();
