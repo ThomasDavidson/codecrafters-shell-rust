@@ -84,7 +84,7 @@ fn main() {
                         println!("cd: {}: No such file or directory", argument);
                         continue;
                     };
-                    argument.replace("$", &home)
+                    argument.replace("~", &home)
                 } else {
                     argument.to_string()
                 };
