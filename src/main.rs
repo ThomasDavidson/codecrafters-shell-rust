@@ -23,7 +23,7 @@ fn main() {
                 if ["exit"
                     , "echo"
                     , "type"].contains(&argument) {
-                    println!("exit is a shell builtin")
+                    println!("{} is a shell builtin", command)
                 } else {
                     println!("{}: command not found", argument)
                 }
