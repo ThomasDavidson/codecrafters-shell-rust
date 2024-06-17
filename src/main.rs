@@ -58,7 +58,7 @@ fn main() {
                 }
             }
             _ => {
-                if let Some(file) = file_on_path(argument) {
+                if let Some(_) = file_on_path(argument) {
                     let output = Command::new("sh")
                         .arg(first_line)
                         .output()
