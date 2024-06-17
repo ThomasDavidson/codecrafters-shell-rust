@@ -13,12 +13,12 @@ fn main() {
 
         let first_line = input.lines().next().unwrap();
 
-        let (command, argument) = first_line.split_once(" ").unwrap_or_else((first_line, ""));
+        let (command, argument) = first_line.split_once(" ").unwrap_or_else(|| (first_line, ""));
 
 
         match command {
             "exit" => break,
-            "echo" => println!("{}", argument);
+            "echo" => println!("{}", argument),
             _ => println!("{}: command not found", command),
         };
     }
