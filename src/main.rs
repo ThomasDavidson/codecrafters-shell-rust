@@ -79,7 +79,7 @@ fn main() {
                 println!("{}", path.display());
             }
             "cd" => {
-                let path = if argument.contains("$") {
+                let path = if argument.contains("~") {
                     let Some(home) = get_home() else {
                         println!("cd: {}: No such file or directory", argument);
                         continue;
