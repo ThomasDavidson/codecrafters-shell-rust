@@ -10,7 +10,7 @@ fn main() {
     let mut input = String::new();
     stdin.read_line(&mut input).unwrap();
 
-    let command = match input {
+    match input {
         _ => println!("{:?}: command not found", input),
     };
 
