@@ -64,7 +64,6 @@ fn main() {
                         .arg(first_line)
                         .output()
                         .unwrap();
-                    println!("Status: {:?}", output);
 
                     let fmt_output = output.stdout.into_iter().map(|c| c as char).collect::<String>();
                     println!("Hello {}! The secret code is {}", argument, fmt_output);
