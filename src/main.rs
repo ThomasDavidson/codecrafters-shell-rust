@@ -47,13 +47,24 @@ fn main() {
             "type" => {
                 if ["exit"
                     , "echo"
-                    , "type"].contains(&argument) {
+                    , "type"
+                    , "pwd"].contains(&argument) {
                     println!("{} is a shell builtin", argument)
                 } else if let Some(file) = file_on_path(argument) {
                     println!("{} is {}", argument, file)
                 } else {
                     println!("{}: not found", argument)
                 }
+            }
+            "pwd" => {
+                let path = match env::current_dir() {
+                    Ok(t) => t,
+                    Err(e) => {
+                        println!("Error: {:?}", e);
+                        continue;
+                    }
+                };
+                println!("{}", path.display());
             }
             _ => {
                 if let Some(_) = file_on_path(command) {
