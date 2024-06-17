@@ -43,7 +43,7 @@ fn main() {
 
         match command {
             "exit" => break,
-            // "echo" => println!("{}", argument),
+            "echo" => println!("{}", argument),
             "type" => {
                 if ["exit"
                     , "echo"
