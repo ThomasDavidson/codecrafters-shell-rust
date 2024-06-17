@@ -2,6 +2,7 @@ use std::env;
 #[allow(unused_imports)]
 use std::io::{self, Write};
 use std::path::Path;
+use std::process::Command;
 
 fn get_path() -> Vec<String> {
     let key = "PATH";
@@ -16,7 +17,8 @@ fn get_path() -> Vec<String> {
 fn file_on_path(file: &str) -> Option<String> {
     let paths = get_path();
     for path in paths {
-        let file_check = format!("{}/{}", path, file);if Path::new(&file_check).exists() {
+        let file_check = format!("{}/{}", path, file);
+        if Path::new(&file_check).exists() {
             return Some(file_check);
         }
     }
@@ -56,7 +58,16 @@ fn main() {
                 }
             }
             _ => {
-                println!("{}: command not found", command)
+                if let Some(file) = file_on_path(argument) {
+                    let output = Command::new("sh")
+                        .arg(first_line)
+                        .output()
+                        .unwrap();
+                    let fmt_output = output.stdout.into_iter().map(|c| c as char).collect::<String>();
+                    println!("Hello {}! The secret code is {}", argument, fmt_output);
+                } else {
+                    println!("{}: command not found", command)
+                }
             }
         };
     }
