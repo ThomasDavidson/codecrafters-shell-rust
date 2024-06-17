@@ -11,10 +11,14 @@ fn main() {
         let mut input = String::new();
         stdin.read_line(&mut input).unwrap();
 
-        let command = input.lines().next().unwrap();
+        let first_line = input.lines().next().unwrap();
+
+        let (command, argument) = first_line.split_once(" ").unwrap_or_else((first_line, ""));
+
 
         match command {
-            "exit 0" => break,
+            "exit" => break,
+            "echo" => println!("{}", argument);
             _ => println!("{}: command not found", command),
         };
     }
