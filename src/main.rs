@@ -2,19 +2,19 @@
 use std::io::{self, Write};
 
 fn main() {
-    print!("$ ");
-    io::stdout().flush().unwrap();
+    loop {
+        print!("$ ");
+        io::stdout().flush().unwrap();
 
-    // Wait for user input
-    let stdin = io::stdin();
-    let mut input = String::new();
-    stdin.read_line(&mut input).unwrap();
+        // Wait for user input
+        let stdin = io::stdin();
+        let mut input = String::new();
+        stdin.read_line(&mut input).unwrap();
 
-    let command = input.lines().next().unwrap();
+        let command = input.lines().next().unwrap();
 
-    match input {
-        _ => println!("{}: command not found", command),
-    };
-
-
+        match input {
+            _ => println!("{}: command not found", command),
+        };
+    }
 }
