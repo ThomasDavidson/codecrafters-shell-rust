@@ -13,7 +13,8 @@ fn main() {
 
         let command = input.lines().next().unwrap();
 
-        match input {
+        match command {
+            "exit 0" => break,
             _ => println!("{}: command not found", command),
         };
     }
