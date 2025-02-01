@@ -42,16 +42,23 @@ fn get_home() -> Option<String> {
 }
 
 #[derive(PartialEq, Copy, Clone)]
-enum Quote {
+enum Quoting {
     Quote,
     DoubleQuote,
 }
-impl Quote {
-    fn parse(c: char) -> Option<Quote> {
+impl Quoting {
+    fn parse(c: char) -> Option<Quoting> {
         match c {
-            '\'' => Some(Quote::Quote),
-            '\"' => Some(Quote::DoubleQuote),
+            '\'' => Some(Quoting::Quote),
+            '\"' => Some(Quoting::DoubleQuote),
             _ => None,
+        }
+    }
+    fn is_end(&self, next: Option<Self>) -> bool {
+        match self {
+            // Quotes end if the same
+            Self::Quote | Self::DoubleQuote => Some(*self) == next,
+            // Escape allways end after one
         }
     }
 }
@@ -87,26 +94,29 @@ impl ShellExec {
         let mut arg = String::new();
 
         let mut capturing = false;
-        let mut quoted: Option<Quote> = None;
+        let mut quoted: Option<Quoting> = None;
 
         for c in args_str.chars() {
-            let quote = Quote::parse(c);
+            let next_char = Quoting::parse(c);
 
-            match (quoted, quote) {
-                (Some(s), Some(new_s)) => {
-                    // End Quote
-                    if s == new_s {
+            match (quoted, next_char) {
+                // Check for end of escaped characters
+                (Some(quote), _) => {
+                    if quote.is_end(next_char) {
                         quoted = None;
-                        continue;
                     }
                 }
                 // Start Quote
                 (None, Some(_)) => {
-                    quoted = quote;
+                    quoted = next_char;
                     continue;
                 }
                 _ => (),
             };
+
+            if next_char.is_some() {
+                continue;
+            }
 
             match (c, quoted.is_some()) {
                 (' ' | '\t', false) => {
