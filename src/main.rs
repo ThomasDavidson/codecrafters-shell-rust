@@ -41,6 +41,21 @@ fn get_home() -> Option<String> {
     }
 }
 
+#[derive(PartialEq, Copy, Clone)]
+enum Quote {
+    Quote,
+    DoubleQuote,
+}
+impl Quote {
+    fn parse(c: char) -> Option<Quote> {
+        match c {
+            '\'' => Some(Quote::Quote),
+            '\"' => Some(Quote::DoubleQuote),
+            _ => None,
+        }
+    }
+}
+
 #[derive(PartialEq)]
 enum Token {
     Space,
@@ -71,14 +86,29 @@ impl ShellExec {
         let mut args: Vec<Token> = Vec::new();
         let mut arg = String::new();
 
-        let mut single_quote = false;
         let mut capturing = false;
+        let mut quoted: Option<Quote> = None;
+
         for c in args_str.chars() {
-            match (c, single_quote) {
-                ('\'', _) => {
-                    single_quote = !single_quote;
+            let quote = Quote::parse(c);
+
+            match (quoted, quote) {
+                (Some(s), Some(new_s)) => {
+                    // End Quote
+                    if s == new_s {
+                        quoted = None;
+                        continue;
+                    }
+                }
+                // Start Quote
+                (None, Some(_)) => {
+                    quoted = quote;
                     continue;
                 }
+                _ => (),
+            };
+
+            match (c, quoted.is_some()) {
                 (' ' | '\t', false) => {
                     if capturing {
                         capturing = false;
