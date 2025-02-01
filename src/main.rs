@@ -40,6 +40,30 @@ fn get_home() -> Option<String> {
     }
 }
 
+struct ShellExec {
+    command: String,
+    args: Vec<String>,
+}
+impl ShellExec {
+    fn parse(input: &String) -> Self {
+        let (command, arg) = input
+            .trim()
+            .split_once(" ")
+            .unwrap_or_else(|| (input.trim(), ""));
+
+        let args = arg
+            .split("'")
+            .filter(|s| s.len() > 0)
+            .map(|s| s.to_string())
+            .collect();
+
+        Self {
+            command: command.to_string(),
+            args,
+        }
+    }
+}
+
 fn main() {
     get_path();
     loop {
@@ -51,21 +75,24 @@ fn main() {
         let mut input = String::new();
         stdin.read_line(&mut input).unwrap();
 
-        let (command, argument) = input
-            .trim()
-            .split_once(" ")
-            .unwrap_or_else(|| (input.trim(), ""));
+        let shell_exec = ShellExec::parse(&input);
 
-        match command {
+        match shell_exec.command.as_str() {
             "exit" => break,
-            "echo" => println!("{}", argument),
+            "echo" => {
+                for arg in shell_exec.args {
+                    print!("{arg}")
+                }
+                println!();
+            }
+
             "type" => {
-                if ["exit", "echo", "type", "pwd"].contains(&argument) {
-                    println!("{} is a shell builtin", argument)
-                } else if let Some(file) = file_on_path(argument) {
-                    println!("{} is {}", argument, file)
+                if ["exit", "echo", "type", "pwd"].contains(&shell_exec.args[0].as_str()) {
+                    println!("{} is a shell builtin", shell_exec.args[0])
+                } else if let Some(file) = file_on_path(shell_exec.args[0].as_str()) {
+                    println!("{} is {}", shell_exec.args[0], file)
                 } else {
-                    println!("{}: not found", argument)
+                    println!("{}: not found", shell_exec.args[0])
                 }
             }
             "pwd" => {
@@ -79,22 +106,22 @@ fn main() {
                 println!("{}", path.display());
             }
             "cd" => {
-                let path = if argument.contains("~") {
+                let path = if shell_exec.args[0].contains("~") {
                     let Some(home) = get_home() else {
-                        println!("cd: {}: No such file or directory", argument);
+                        println!("cd: {}: No such file or directory", shell_exec.args[0]);
                         continue;
                     };
-                    argument.replace("~", &home)
+                    shell_exec.args[0].replace("~", &home)
                 } else {
-                    argument.to_string()
+                    shell_exec.args[0].to_string()
                 };
 
                 match set_current_dir(path) {
                     Ok(_) => continue,
-                    Err(_) => println!("cd: {}: No such file or directory", argument),
+                    Err(_) => println!("cd: {}: No such file or directory", shell_exec.args[0]),
                 }
             }
-            _ => {
+            command => {
                 if let Some(_) = file_on_path(command) {
                     let output = Command::new("sh").arg("-c").arg(&input).output().unwrap();
 
