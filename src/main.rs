@@ -1,3 +1,4 @@
+use std::cmp::PartialEq;
 use std::env;
 use std::env::set_current_dir;
 #[allow(unused_imports)]
@@ -40,27 +41,77 @@ fn get_home() -> Option<String> {
     }
 }
 
+#[derive(PartialEq)]
+enum Token {
+    Space,
+    Argument(String),
+}
+impl Token {
+    fn to_str(&self) -> &str {
+        match self {
+            Self::Space => " ",
+            Self::Argument(arg) => arg,
+        }
+    }
+}
+
+#[derive(PartialEq)]
 struct ShellExec {
     command: String,
-    args: Vec<String>,
+    args: Vec<Token>,
 }
+
 impl ShellExec {
     fn parse(input: &String) -> Self {
-        let (command, arg) = input
+        let (command, args_str) = input
             .trim()
             .split_once(" ")
             .unwrap_or_else(|| (input.trim(), ""));
 
-        let args = arg
-            .split("'")
-            .filter(|s| s.len() > 0)
-            .map(|s| s.to_string())
-            .collect();
+        let mut args: Vec<Token> = Vec::new();
+        let mut arg = String::new();
+
+        let mut single_quote = false;
+        let mut capturing = false;
+        for c in args_str.chars() {
+            match (c, single_quote) {
+                ('\'', _) => {
+                    single_quote = !single_quote;
+                    continue;
+                }
+                (' ' | '\t', false) => {
+                    if capturing {
+                        capturing = false;
+                        args.push(Token::Argument(arg.clone()));
+                        arg.clear();
+                    }
+                }
+                _ => {
+                    if !capturing {
+                        capturing = true;
+                    }
+                }
+            }
+            if capturing {
+                arg.push(c);
+            } else if args.last() != Some(&Token::Space) {
+                args.push(Token::Space);
+            }
+        }
+        if arg != "" {
+            args.push(Token::Argument(arg));
+        }
 
         Self {
             command: command.to_string(),
             args,
         }
+    }
+    fn get_args(&self) -> Vec<&str> {
+        self.args.iter().map(|t| t.to_str()).collect()
+    }
+    fn get_arg(&self) -> &str {
+        self.args[0].to_str()
     }
 }
 
@@ -80,19 +131,19 @@ fn main() {
         match shell_exec.command.as_str() {
             "exit" => break,
             "echo" => {
-                for arg in shell_exec.args {
+                for arg in shell_exec.get_args() {
                     print!("{arg}")
                 }
                 println!();
             }
 
             "type" => {
-                if ["exit", "echo", "type", "pwd"].contains(&shell_exec.args[0].as_str()) {
-                    println!("{} is a shell builtin", shell_exec.args[0])
-                } else if let Some(file) = file_on_path(shell_exec.args[0].as_str()) {
-                    println!("{} is {}", shell_exec.args[0], file)
+                if ["exit", "echo", "type", "pwd"].contains(&shell_exec.get_arg()) {
+                    println!("{} is a shell builtin", shell_exec.get_arg())
+                } else if let Some(file) = file_on_path(shell_exec.get_arg()) {
+                    println!("{} is {}", shell_exec.get_arg(), file)
                 } else {
-                    println!("{}: not found", shell_exec.args[0])
+                    println!("{}: not found", shell_exec.get_arg())
                 }
             }
             "pwd" => {
@@ -106,19 +157,19 @@ fn main() {
                 println!("{}", path.display());
             }
             "cd" => {
-                let path = if shell_exec.args[0].contains("~") {
+                let path = if shell_exec.get_arg().contains("~") {
                     let Some(home) = get_home() else {
-                        println!("cd: {}: No such file or directory", shell_exec.args[0]);
+                        println!("cd: {}: No such file or directory", shell_exec.get_arg());
                         continue;
                     };
-                    shell_exec.args[0].replace("~", &home)
+                    shell_exec.get_arg().replace("~", &home)
                 } else {
-                    shell_exec.args[0].to_string()
+                    shell_exec.get_arg().to_string()
                 };
 
                 match set_current_dir(path) {
                     Ok(_) => continue,
-                    Err(_) => println!("cd: {}: No such file or directory", shell_exec.args[0]),
+                    Err(_) => println!("cd: {}: No such file or directory", shell_exec.get_arg()),
                 }
             }
             command => {
