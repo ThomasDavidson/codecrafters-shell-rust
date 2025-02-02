@@ -44,15 +44,15 @@ fn get_home() -> Option<String> {
 #[derive(Debug, PartialEq, Copy, Clone)]
 enum Quoting {
     Quote,
-    DoubleQuote,
+    DoubleQuote(bool),
     Escape,
 }
 impl Quoting {
     fn parse(c: char) -> Option<Quoting> {
         match c {
-            '\'' => Some(Quoting::Quote),
-            '\"' => Some(Quoting::DoubleQuote),
-            '\\' => Some(Quoting::Escape),
+            '\'' => Some(Self::Quote),
+            '\"' => Some(Self::DoubleQuote(false)),
+            '\\' => Some(Self::Escape),
             _ => None,
         }
     }
@@ -86,10 +86,27 @@ impl ShellExec {
                     quoting = None;
                 }
                 // Middle of quote
-                (Some(Quoting::DoubleQuote) | Some(Quoting::Quote), None) => arg.push(c),
+                (Some(Quoting::Quote | Quoting::DoubleQuote(false)), None) => arg.push(c),
+                (Some(Quoting::DoubleQuote(false)), Some(Quoting::Escape)) => {
+                    quoting = Some(Quoting::DoubleQuote(true))
+                }
+                // Escape in the middle of a double quote
+                (Some(Quoting::DoubleQuote(true)), _) => {
+                    // if a special character then don't add escape
+                    match c {
+                        '$' | '\\' | '"' => {
+                            arg.push(c);
+                        }
+                        _ => {
+                            arg.push('\\');
+                            arg.push(c)
+                        }
+                    }
+                    quoting = Some(Quoting::DoubleQuote(false))
+                }
                 // End Quote
                 (Some(Quoting::Quote), Some(Quoting::Quote))
-                | (Some(Quoting::DoubleQuote), Some(Quoting::DoubleQuote)) => {
+                | (Some(Quoting::DoubleQuote(_)), Some(Quoting::DoubleQuote(_))) => {
                     quoting = None;
                     continue;
                 }
