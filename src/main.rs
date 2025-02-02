@@ -41,38 +41,19 @@ fn get_home() -> Option<String> {
     }
 }
 
-#[derive(PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 enum Quoting {
     Quote,
     DoubleQuote,
+    Escape,
 }
 impl Quoting {
     fn parse(c: char) -> Option<Quoting> {
         match c {
             '\'' => Some(Quoting::Quote),
             '\"' => Some(Quoting::DoubleQuote),
+            '\\' => Some(Quoting::Escape),
             _ => None,
-        }
-    }
-    fn is_end(&self, next: Option<Self>) -> bool {
-        match self {
-            // Quotes end if the same
-            Self::Quote | Self::DoubleQuote => Some(*self) == next,
-            // Escape allways end after one
-        }
-    }
-}
-
-#[derive(PartialEq)]
-enum Token {
-    Space,
-    Argument(String),
-}
-impl Token {
-    fn to_str(&self) -> &str {
-        match self {
-            Self::Space => " ",
-            Self::Argument(arg) => arg,
         }
     }
 }
@@ -80,7 +61,7 @@ impl Token {
 #[derive(PartialEq)]
 struct ShellExec {
     command: String,
-    args: Vec<Token>,
+    args: Vec<String>,
 }
 
 impl ShellExec {
@@ -90,56 +71,44 @@ impl ShellExec {
             .split_once(" ")
             .unwrap_or_else(|| (input.trim(), ""));
 
-        let mut args: Vec<Token> = Vec::new();
+        let mut args: Vec<_> = Vec::new();
         let mut arg = String::new();
 
-        let mut capturing = false;
-        let mut quoted: Option<Quoting> = None;
+        let mut quoting: Option<Quoting> = None;
 
         for c in args_str.chars() {
-            let next_char = Quoting::parse(c);
+            let quote = Quoting::parse(c);
 
-            match (quoted, next_char) {
-                // Check for end of escaped characters
-                (Some(quote), _) => {
-                    if quote.is_end(next_char) {
-                        quoted = None;
-                    }
+            match (quoting, quote) {
+                // Single escaped character
+                (Some(Quoting::Escape), _) => {
+                    arg.push(c);
+                    quoting = None;
                 }
-                // Start Quote
-                (None, Some(_)) => {
-                    quoted = next_char;
+                // Middle of quote
+                (Some(Quoting::DoubleQuote) | Some(Quoting::Quote), None) => arg.push(c),
+                // End Quote
+                (Some(Quoting::Quote), Some(Quoting::Quote))
+                | (Some(Quoting::DoubleQuote), Some(Quoting::DoubleQuote)) => {
+                    quoting = None;
                     continue;
                 }
-                _ => (),
-            };
-
-            if next_char.is_some() {
-                continue;
-            }
-
-            match (c, quoted.is_some()) {
-                (' ' | '\t', false) => {
-                    if capturing {
-                        capturing = false;
-                        args.push(Token::Argument(arg.clone()));
-                        arg.clear();
+                // Start Quote
+                (None, Some(_)) => quoting = quote,
+                // Non Quote logic
+                (None, None) | (Some(_), Some(_)) => match c {
+                    ' ' => {
+                        if !arg.is_empty() {
+                            args.push(arg.clone());
+                            arg.clear();
+                        }
                     }
-                }
-                _ => {
-                    if !capturing {
-                        capturing = true;
-                    }
-                }
-            }
-            if capturing {
-                arg.push(c);
-            } else if args.last() != Some(&Token::Space) {
-                args.push(Token::Space);
+                    _ => arg.push(c),
+                },
             }
         }
-        if arg != "" {
-            args.push(Token::Argument(arg));
+        if !arg.is_empty() {
+            args.push(arg);
         }
 
         Self {
@@ -148,10 +117,10 @@ impl ShellExec {
         }
     }
     fn get_args(&self) -> Vec<&str> {
-        self.args.iter().map(|t| t.to_str()).collect()
+        self.args.iter().map(|t| t.as_str()).collect()
     }
     fn get_arg(&self) -> &str {
-        self.args[0].to_str()
+        self.args[0].as_str()
     }
 }
 
@@ -172,7 +141,7 @@ fn main() {
             "exit" => break,
             "echo" => {
                 for arg in shell_exec.get_args() {
-                    print!("{arg}")
+                    print!("{arg} ")
                 }
                 println!();
             }
