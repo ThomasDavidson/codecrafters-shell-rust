@@ -66,17 +66,14 @@ struct ShellExec {
 
 impl ShellExec {
     fn parse(input: &String) -> Self {
-        let (command, args_str) = input
-            .trim()
-            .split_once(" ")
-            .unwrap_or_else(|| (input.trim(), ""));
+        let input = input.trim();
 
         let mut args: Vec<_> = Vec::new();
         let mut arg = String::new();
 
         let mut quoting: Option<Quoting> = None;
 
-        for c in args_str.chars() {
+        for c in input.chars() {
             let quote = Quoting::parse(c);
 
             match (quoting, quote) {
@@ -128,10 +125,13 @@ impl ShellExec {
             args.push(arg);
         }
 
-        Self {
-            command: command.to_string(),
-            args,
-        }
+        let command = if args.len() > 0 {
+            args.remove(0)
+        } else {
+            String::new()
+        };
+
+        Self { command, args }
     }
     fn get_args(&self) -> Vec<&str> {
         self.args.iter().map(|t| t.as_str()).collect()
@@ -154,7 +154,9 @@ fn main() {
 
         let shell_exec = ShellExec::parse(&input);
 
-        match shell_exec.command.as_str() {
+        let command = shell_exec.command.as_str();
+
+        match command {
             "exit" => break,
             "echo" => {
                 for arg in shell_exec.get_args() {
@@ -198,7 +200,7 @@ fn main() {
                     Err(_) => println!("cd: {}: No such file or directory", shell_exec.get_arg()),
                 }
             }
-            command => {
+            _ => {
                 if let Some(_) = file_on_path(command) {
                     let output = Command::new("sh").arg("-c").arg(&input).output().unwrap();
 
