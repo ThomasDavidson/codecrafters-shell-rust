@@ -1,8 +1,8 @@
-mod command;
 mod shell_io;
 
 use shell_io::Output;
 
+use crate::shell_io::{RedirectFrom, WriteType};
 use std::cmp::PartialEq;
 use std::env;
 use std::env::set_current_dir;
@@ -10,10 +10,8 @@ use std::fmt::Write as _;
 #[allow(unused_imports)]
 use std::fs::File;
 use std::io::{self, Write as _};
-use std::iter::Peekable;
 use std::path::Path;
 use std::process::Command;
-use std::str::Chars;
 
 fn get_path() -> Vec<String> {
     let key = "PATH";
@@ -53,7 +51,7 @@ fn get_home() -> Option<String> {
 #[derive(Debug)]
 enum Token {
     Literal(String),
-    Redirect(Output),
+    Redirect(WriteType, RedirectFrom),
     #[allow(dead_code)]
     Quote(Quoting),
 }
@@ -67,17 +65,12 @@ impl Token {
             _ => panic!("Only literals can be pushed"),
         }
     }
-    fn append_token(&mut self, other: &String) {
-        match self {
-            Self::Literal(s) => s.push_str(other),
-            _ => panic!("Only literals can be appended"),
-        }
-    }
+
     fn as_str(&self) -> &str {
         match self {
             Self::Literal(s) => s.as_str(),
             Self::Quote(q) => q.as_str(),
-            Self::Redirect(r) => r.as_str(),
+            Self::Redirect(_, _) => ">",
         }
     }
     fn is_empty(&self) -> bool {
@@ -86,136 +79,120 @@ impl Token {
             _ => false,
         }
     }
-    fn parse(chars: &mut Peekable<Chars>) -> Self {
-        let mut arg = Token::new();
+    fn parse(input: &str) -> Vec<Self> {
+        let mut tokens: Vec<_> = Vec::new();
+        let mut token = Token::new();
         let mut quoting: Option<Quoting> = None;
 
-        while let Some(c) = chars.peek() {
-            let c = *c;
+        // add padding
+        let mut buf = input.to_string();
+        buf.push_str("   ");
 
-            let quote = Quoting::parse(c);
+        let mut windows = buf.as_bytes().windows(3);
+        while let Some(window) = windows.next() {
+            let (c1, c2, c3) = (window[0] as char, window[1] as char, window[2] as char);
 
-            let is_quoted = match (quoting, quote) {
+            let quote = Quoting::parse(c1);
+
+            let mut is_quoted = true;
+            match (quoting, quote) {
                 // Single escaped character
                 (Some(Quoting::Escape), _) => {
-                    arg.push(c);
+                    token.push(c1);
                     quoting = None;
-                    true
                 }
                 // Middle of quote
                 (Some(Quoting::Quote | Quoting::DoubleQuote), None) => {
-                    arg.push(c);
-                    true
+                    token.push(c1);
                 }
                 // Escape in the middle of a double quote
                 (Some(Quoting::DoubleQuote), Some(Quoting::Escape)) => {
-                    // clear current
-                    chars.next();
-
-                    let Some(next) = chars.peek() else {
-                        return arg;
-                    };
+                    // clear next since it gets pushed
+                    _ = windows.next();
 
                     // if a special character then don't add escape
-                    match next {
+                    match c2 {
                         '$' | '\\' | '"' => {
-                            arg.push(*next);
+                            token.push(c2);
                         }
                         _ => {
-                            arg.push(c);
-                            arg.push(*next);
+                            token.push(c1);
+                            token.push(c2);
                         }
                     }
-
-                    true
                 }
                 // End Quote
                 (Some(Quoting::Quote), Some(Quoting::Quote))
                 | (Some(Quoting::DoubleQuote), Some(Quoting::DoubleQuote)) => {
                     quoting = None;
-                    true
                 }
                 // Start Quote
                 (None, Some(_)) => {
                     quoting = quote;
-                    true
                 }
                 // Non Quote logic
-                (None, None) | (Some(_), Some(_)) => false,
+                (None, None) | (Some(_), Some(_)) => is_quoted = false,
             };
 
             if is_quoted {
-                chars.next();
                 continue;
             }
 
-            let (consume_char, exit) = match c {
+            match (c1, c2, c3) {
                 // End arg
-                ' ' => {
-                    if arg.is_empty() {
-                        (true, true)
-                    } else {
-                        (false, true)
+                (' ', _, _) => {
+                    if !token.is_empty() {
+                        tokens.push(token);
+                        token = Token::new();
                     }
                 }
                 // Redirect
-                '1' | '2' => {
-                    if !arg.is_empty() {
-                        let mut dup_chars = chars.clone();
-                        let next_token = Token::parse(&mut dup_chars);
-                        match next_token {
-                            // not a redirect so add to token and continue
-                            Token::Literal(lit) => {
-                                arg.append_token(&lit);
-                                *chars = dup_chars;
-                                (false, false)
-                            }
-                            // is the start of a new token so return value without consuming
-                            _ => (false, true),
-                        }
-                    } else {
-                        chars.next();
-                        arg.push(c);
-                        let Some(next) = chars.peek() else {
-                            continue;
-                        };
+                ('1' | '2', '>', _) | ('>', _, _) => {
+                    if !token.is_empty() {
+                        tokens.push(token);
+                        token = Token::new();
+                    }
 
-                        // if a special character then don't add escape
-                        match (c, next) {
-                            ('1', '>') => {
-                                arg = Token::Redirect(Output::Stdout);
-                                (true, true)
-                            }
-                            ('2', '>') => {
-                                arg = Token::Redirect(Output::Stderr);
-                                (true, true)
-                            }
-                            _ => (false, false),
+                    let redirect_type = match (c1, c2, c3) {
+                        // 1>> 2>> >> 
+                        ('>', '>', _) | ('1' | '2', '>', '>') => WriteType::Append,
+                        // >
+                        _ => WriteType::Overwrite,
+                    };
+
+                    // skip read tokens
+                    let read_tokens = match (c1, c2, c3) {
+                        (_, '>', '>') => 3,
+                        (_, '>', _) => 2,
+                        _ => 1,
+                    };
+                    for _ in 0..read_tokens {
+                        windows.next();
+                    }
+
+                    match c1 {
+                        '1' | '>' => {
+                            token = Token::Redirect(redirect_type, RedirectFrom::Stdout);
                         }
+                        '2' => {
+                            token = Token::Redirect(redirect_type, RedirectFrom::Stderr);
+                        }
+                        _ => (),
                     }
-                }
-                '>' => {
-                    if arg.is_empty() {
-                        arg = Token::Redirect(Output::Stdout);
-                        (true, true)
-                    } else {
-                        (false, true)
-                    }
+                    tokens.push(token);
+                    token = Token::new();
                 }
                 _ => {
-                    arg.push(c);
-                    (true, false)
+                    token.push(c1);
                 }
             };
-
-            if consume_char {
-                _ = chars.next();
-            }
-            if exit {
-                return arg;
-            }
         }
-        arg
+
+        if !token.is_empty() {
+            tokens.push(token);
+        }
+
+        tokens
     }
 }
 
@@ -269,20 +246,7 @@ impl ShellExec {
     fn parse(input: &String) -> Self {
         let input = input.trim();
 
-        let mut chars = input.chars().peekable();
-
-        let mut tokens: Vec<_> = Vec::new();
-
-        loop {
-            let arg = Token::parse(&mut chars);
-
-            if !arg.is_empty() {
-                tokens.push(arg);
-            }
-            if chars.peek().is_none() {
-                break;
-            }
-        }
+        let tokens = Token::parse(input);
 
         let mut command: Option<Token> = None;
         let mut args: Vec<_> = Vec::new();
@@ -294,18 +258,17 @@ impl ShellExec {
         while let Some(token) = tokens.next() {
             match (&token, &command) {
                 (Token::Literal(_), None) => command = Some(token),
-                (Token::Redirect(out), _) => {
+                (Token::Redirect(write_type, output_type), _) => {
                     let Some(next) = tokens.next() else {
                         continue;
                     };
                     let Token::Literal(path) = next else {
                         continue;
                     };
-                    let file = Output::new_file(&path).ok();
-                    match out {
-                        Output::Stdout => output = file,
-                        Output::Stderr => errout = file,
-                        _ => (),
+                    let file = Output::new_file(&path, write_type).ok();
+                    match output_type {
+                        RedirectFrom::Stdout => output = file,
+                        RedirectFrom::Stderr => errout = file,
                     }
 
                     // stop checking tokens after full command for now
