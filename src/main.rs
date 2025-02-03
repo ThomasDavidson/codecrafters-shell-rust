@@ -29,7 +29,6 @@ fn file_on_path(file: &str) -> Option<String> {
     let paths = get_path();
     for path in paths {
         let file_check = format!("{}/{}", path, file);
-        // println!("{}", file_check);
         if Path::new(&file_check).exists() {
             return Some(file_check);
         }
@@ -160,7 +159,7 @@ impl Token {
                     }
                 }
                 // Redirect
-                '1' => {
+                '1' | '2' => {
                     if !arg.is_empty() {
                         let mut dup_chars = chars.clone();
                         let next_token = Token::parse(&mut dup_chars);
@@ -182,9 +181,13 @@ impl Token {
                         };
 
                         // if a special character then don't add escape
-                        match next {
-                            '>' => {
+                        match (c, next) {
+                            ('1', '>') => {
                                 arg = Token::Redirect(Output::Stdout);
+                                (true, true)
+                            }
+                            ('2', '>') => {
+                                arg = Token::Redirect(Output::Stderr);
                                 (true, true)
                             }
                             _ => (false, false),
@@ -259,6 +262,7 @@ struct ShellExec {
     command: Token,
     args: Vec<Token>,
     output: Output,
+    errout: Output,
 }
 
 impl ShellExec {
@@ -283,20 +287,26 @@ impl ShellExec {
         let mut command: Option<Token> = None;
         let mut args: Vec<_> = Vec::new();
         let mut output: Option<Output> = None;
+        let mut errout: Option<Output> = None;
 
         let mut tokens = tokens.into_iter();
 
         while let Some(token) = tokens.next() {
             match (&token, &command) {
                 (Token::Literal(_), None) => command = Some(token),
-                (Token::Redirect(_), _) => {
+                (Token::Redirect(out), _) => {
                     let Some(next) = tokens.next() else {
                         continue;
                     };
                     let Token::Literal(path) = next else {
                         continue;
                     };
-                    output = Output::new_file(&path).ok();
+                    let file = Output::new_file(&path).ok();
+                    match out {
+                        Output::Stdout => output = file,
+                        Output::Stderr => errout = file,
+                        _ => (),
+                    }
 
                     // stop checking tokens after full command for now
                     break;
@@ -309,6 +319,7 @@ impl ShellExec {
             command: command.unwrap_or(Token::new()),
             args,
             output: output.unwrap_or(Output::Stdout),
+            errout: errout.unwrap_or(Output::Stderr),
         }
     }
     #[allow(dead_code)]
@@ -323,7 +334,8 @@ impl ShellExec {
 fn main() {
     get_path();
     loop {
-        print!("$ ");
+        _ = write!(std::io::stdout(), "$ ");
+
         io::stdout().flush().unwrap();
 
         // Wait for user input
@@ -336,6 +348,7 @@ fn main() {
         let command = shell_exec.command.as_str();
 
         let mut output = String::new();
+        let mut errout = String::new();
 
         match command {
             "exit" => break,
@@ -346,67 +359,81 @@ fn main() {
             }
             "type" => {
                 if ["exit", "echo", "type", "pwd"].contains(&shell_exec.get_arg()) {
-                    _ = write!(&mut output, "{} is a shell builtin", shell_exec.get_arg())
+                    _ = write!(&mut output, "{} is a shell builtin", shell_exec.get_arg());
                 } else if let Some(file) = file_on_path(shell_exec.get_arg()) {
-                    _ = write!(&mut output, "{} is {}", shell_exec.get_arg(), file)
+                    _ = write!(&mut output, "{} is {}", shell_exec.get_arg(), file);
                 } else {
-                    _ = write!(&mut output, "{}: not found", shell_exec.get_arg())
+                    _ = write!(&mut errout, "{}: not found", shell_exec.get_arg());
                 }
             }
             "pwd" => {
-                let path = match env::current_dir() {
-                    Ok(t) => t,
+                match env::current_dir() {
+                    Ok(path) => _ = write!(&mut output, "{}", path.display()),
                     Err(e) => {
-                        _ = write!(&mut output, "Error: {:?}", e);
+                        _ = write!(&mut errout, "Error: {:?}", e);
                         continue;
                     }
                 };
-                _ = write!(&mut output, "{}", path.display());
             }
             "cd" => {
-                let path = if shell_exec.get_arg().contains("~") {
-                    let Some(home) = get_home() else {
+                let path: Option<String> = if shell_exec.get_arg().contains("~") {
+                    if let Some(home) = get_home() {
+                        Some(shell_exec.get_arg().replace("~", &home))
+                    } else {
                         _ = write!(
-                            &mut output,
+                            &mut errout,
                             "cd: {}: No such file or directory",
                             shell_exec.get_arg()
                         );
-                        continue;
-                    };
-                    shell_exec.get_arg().replace("~", &home)
+                        None
+                    }
                 } else {
-                    shell_exec.get_arg().to_string()
+                    Some(shell_exec.get_arg().to_string())
                 };
 
-                match set_current_dir(path) {
-                    Ok(_) => continue,
-                    Err(_) => {
-                        _ = write!(
-                            &mut output,
-                            "cd: {}: No such file or directory",
-                            shell_exec.get_arg()
-                        )
-                    }
+                match path {
+                    Some(path) => match set_current_dir(path) {
+                        Ok(_) => (),
+                        Err(_) => {
+                            _ = write!(
+                                &mut errout,
+                                "cd: {}: No such file or directory",
+                                shell_exec.get_arg()
+                            );
+                        }
+                    },
+                    None => (),
                 }
             }
             _ => {
                 if let Some(_) = file_on_path(command) {
                     let cmd_output = Command::new("sh").arg("-c").arg(input).output().unwrap();
 
-                    let out = if cmd_output.status.success() {
-                        cmd_output.stdout
-                    } else {
-                        shell_exec.output = Output::Stdout;
-                        cmd_output.stderr
-                    };
-
-                    let fmt_output = out.into_iter().map(|c| c as char).collect::<String>();
+                    let fmt_output = cmd_output
+                        .stdout
+                        .into_iter()
+                        .map(|c| c as char)
+                        .collect::<String>();
                     _ = write!(&mut output, "{}", fmt_output.trim_end());
+
+                    let fmt_err = cmd_output
+                        .stderr
+                        .into_iter()
+                        .map(|c| c as char)
+                        .collect::<String>();
+                    _ = write!(&mut errout, "{}", fmt_err.trim_end());
                 } else {
-                    _ = write!(&mut output, "{}: command not found", command.trim())
+                    _ = write!(&mut errout, "{}: command not found", command)
                 }
             }
         };
-        shell_exec.output.write(output);
+
+        if !output.is_empty() {
+            shell_exec.output.write(output);
+        }
+
+        if !errout.is_empty() {
+            shell_exec.errout.write(errout);
+        }
     }
 }

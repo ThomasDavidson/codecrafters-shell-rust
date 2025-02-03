@@ -7,18 +7,21 @@ use std::path::Path;
 pub enum Output {
     File(File),
     Stdout,
+    Stderr,
 }
 impl Output {
     pub fn write(&mut self, content: String) {
         match self {
             Self::File(file) => _ = file.write(content.as_bytes()).unwrap(),
             Self::Stdout => _ = writeln!(io::stdout(), "{}", content),
+            Self::Stderr => _ = writeln!(io::stderr(), "{}", content),
         }
     }
     pub fn as_str(&self) -> &str {
         match self {
             Self::Stdout => "",
             Self::File(_) => "1>",
+            Self::Stderr => "",
         }
     }
     pub fn new_file(path: &String) -> io::Result<Self> {
